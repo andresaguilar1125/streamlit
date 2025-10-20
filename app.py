@@ -1,25 +1,33 @@
 import streamlit as st
 import pandas as pd
+import duckdb
 
 GOOGLESHEET_URL = "https://docs.google.com/spreadsheets/d/1rAkmgUkf8xcqlwdcnX0VpHAIgUrHgCRRhU8cBlsA3HA/export?format=csv&gid="  
 
-# Mapping GID to category names
+# Map categories to GIDs
 GID_CATEGORY = {
-    "FAMILIAR": "164123414",
-    "MEDICO": "754260188",
-    "RECIBOS": "1534979300",
-    "RESTAURANTES": "1270398057",
-    "SUPER": "1192999871",
-    "VIAJES": "856975249"
+    "Familiar": "164123414",
+    "Medico": "754260188",
+    "Recibos": "1534979300",
+    "Restaurantes": "1270398057",
+    "Super": "1192999871",
+    "Viajes": "856975249"
 }
 
-# Function to get a sheet as a DataFrame
 @st.cache_data
-def get_sheet(gid):
-    return pd.read_csv(GOOGLESHEET_URL + gid)
+def get_sheet(gid, category_name):
+    # Cached function to load Google Sheet as pandas DataFrame and add a category column
+    df = pd.read_csv(GOOGLESHEET_URL + gid)
+    df["Categoria"] = category_name
+    df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce", infer_datetime_format=True)
+    df["Monto"] = df["Monto"].str.replace(",", "").astype(float)
+    return df
 
-# Load all sheets dynamically into a dictionary
-dfs = {category: get_sheet(gid) for category, gid in GID_CATEGORY.items()}
+# Concatenate all sheets and transform data
+df = pd.concat([get_sheet(gid, category) for category, gid in GID_CATEGORY.items()])
 
-# Example: access the 'FAMILIAR' DataFrame
-st.write(dfs["MEDICO"])
+st.write("### Combined & Transformed Data")
+st.dataframe(df)
+
+st.write(duckdb.query(open("df_desktop.sql").read()) .to_df())
+st.write(duckdb.query(open("df_mobile.sql").read()) .to_df())
