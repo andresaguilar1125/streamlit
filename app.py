@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 import duckdb
 
 GOOGLESHEET_URL = "https://docs.google.com/spreadsheets/d/1rAkmgUkf8xcqlwdcnX0VpHAIgUrHgCRRhU8cBlsA3HA/export?format=csv&gid="  
@@ -26,8 +27,17 @@ def get_sheet(gid, category_name):
 # Concatenate all sheets and transform data
 df = pd.concat([get_sheet(gid, category) for category, gid in GID_CATEGORY.items()])
 
-st.write("### Combined & Transformed Data")
-st.dataframe(df)
+# st.write("### Combined & Transformed Data")
+# st.dataframe(df)
 
-st.write(duckdb.query(open("df_desktop.sql").read()) .to_df())
-st.write(duckdb.query(open("df_mobile.sql").read()) .to_df())
+
+# for dataframes tabs
+# st.write(duckdb.query(open("df_desktop.sql").read()) .to_df())
+# st.write(duckdb.query(open("df_mobile.sql").read()) .to_df())
+# st.write(duckdb.query(open("df_budget.sql").read()) .to_df())
+
+# for chart tabs
+df_extras = (duckdb.query(open("fig_extras.sql").read()) .to_df())
+df_extras
+fig = px.bar(df_extras, x="Periodo", y="Total", color="Categoria", barmode="stack")
+fig

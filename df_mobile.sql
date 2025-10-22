@@ -1,6 +1,5 @@
 -- database: :memory:
 SELECT  strftime(Fecha,'%m/%d/%y') AS Fecha
-    --    ,strftime(Fecha,'%Y%m')     AS Periodo
        ,Categoria                  AS Categoria
        ,Persona                    AS Persona
        ,Comercio                   AS Comercio
