@@ -4,29 +4,22 @@ import plotly.express as px
 import duckdb
 
 # ********************************** 
-# FUNCTIONS
+# DATA
 # **********************************
 @st.cache_data
-def get_sheet(gid, category_name):
-    # Cached function to load Google Sheet as pandas DataFrame and add a category column
-    df = pd.read_csv(GOOGLESHEET_URL + gid)
-    df["Categoria"] = category_name
-    df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce", infer_datetime_format=True)
-    df["Monto"] = df["Monto"].str.replace(",", "").astype(float)
+def get_csv(gid_dict):
+    """Load multiple CSVs from Google Sheets and concatenate into one DataFrame."""
+    dfs = []
+    for category, gid in gid_dict.items():
+        df_read = pd.read_csv(GOOGLESHEET_URL + gid)
+        # Add category column as table name
+        df_read["Categoria"] = category
+        # Cast to datetime object
+        df_read["Fecha"] = pd.to_datetime(df_read["Fecha"], errors="coerce", infer_datetime_format=True)
+        dfs.append(df_read)
+    df = pd.concat(dfs, ignore_index=True)
+    print(df.dtypes)
     return df
-
-def get_unique_values(df, column_name):
-
-    # Returns a list of unique, non-null values from the specified column in a pandas DataFrame.
-
-    # Parameters:
-    # - dataframe (pd.DataFrame): The DataFrame to process.
-    # - column_name (str): The name of the column to extract unique values from.
-
-    # Returns:
-    # - List of unique values.
-
-    return sorted(df[column_name].dropna().unique().tolist(), reverse=True)
 
 # ********************************** 
 # CONSTANTS
@@ -45,22 +38,21 @@ GID_CATEGORY = {
 }
 
 # Dataframes
-df = pd.concat([get_sheet(gid, category) for category, gid in GID_CATEGORY.items()])
+df = get_csv(GID_CATEGORY)
+df_main = duckdb.query(open("df_main.sql").read()).to_df()
+# df_grouped = duckdb.query(open("df_grouped.sql").read()).to_df()
 
 # **********************************
 # WIDGETS
 # **********************************
-# Create multiselect widget with dynamic options
-persona = st.multiselect("Selecciona Persona", get_unique_values(df, "Persona"))
-
-# Filter DataFrame based on selected personas
-df = df[df["Persona"].isin(persona)]
 
 # ********************************** 
-# DISPLAY
+# STREAMLIT
 # **********************************
-st.write(df)
-
-
-# for dataframes tabs
-# st.write(duckdb.query(open("df_budget.sql").read()) .to_df())
+# st.write(df)
+tab1, tab2 = st.tabs(["Super", "Extras"])
+with tab1:
+    st.write(df_main.loc[df_main["Categoria"] == "Super"])
+    # st.write(df_grouped.loc[df_grouped["Categoria"] == "Super"])
+with tab2:
+    st.write(df)
