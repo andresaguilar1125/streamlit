@@ -1,7 +1,13 @@
 import streamlit as st
 import pandas as pd
-import duckdb
-from pathlib import Path
+from datetime import datetime
+
+st.set_page_config(
+   page_title="Gastos",
+   page_icon="🧊",
+   layout="wide",
+   initial_sidebar_state="expanded",
+)
 
 # ********************************** 
 # SECRETS
@@ -25,53 +31,67 @@ def get_csv(_gid_dict):
 df_raw = get_csv(GID_CATEGORY)
 
 # ********************************** 
-# DuckDB in-memory connection
+# Preprocess df (like df_main.sql)
 # **********************************
-conn = duckdb.connect(database=":memory:")
-conn.register("df", df_raw)  # register raw dataframe as table
+df = df_raw.copy()
 
-# ********************************** 
-# Load SQL template
-# **********************************
-sql_template = Path("df_main.sql").read_text()
+# Clean Monto
+df["Monto"] = df["Monto"].astype(str).str.replace(",", "").astype(float)
 
-# ********************************** 
-# Get initial df for widget options
-# **********************************
-temp_df = conn.execute(sql_template.format(filters="TRUE")).fetchdf()
-
-selected_persona = st.selectbox(
-    "Select Persona",
-    options=["All"] + temp_df["Persona"].dropna().unique().tolist()
-)
-
-selected_period = st.selectbox(
-    "Select Periodo",
-    options=["All"] + temp_df["Periodo"].dropna().unique().tolist()
+# Derived columns
+df["Periodo"] = df["Fecha"].dt.strftime("%Y%m")
+df["Dia"] = df["Fecha"].dt.strftime("%m-%d-%Y")
+df["Quincena"] = df["Fecha"].dt.day.apply(lambda d: "Q2" if d >= 15 else "Q1")
+df["Semana"] = df["Fecha"].dt.day.apply(
+    lambda d: "S1" if 1 <= d <= 7 else "S2" if 8 <= d <= 14 else "S3" if 15 <= d <= 21 else "S4"
 )
 
 # ********************************** 
-# Build dynamic filters
+# Tabs
 # **********************************
-filter_clauses = []
+tab1, tab2 = st.tabs(["Data", "Mensual"])
 
-if selected_persona != "All":
-    filter_clauses.append(f"Persona = '{selected_persona}'")
-if selected_period != "All":
-    filter_clauses.append(f"Periodo = '{selected_period}'")
-
-filters_sql = " AND ".join(filter_clauses) if filter_clauses else "TRUE"
-
-# ********************************** 
-# Execute final query
-# **********************************
-final_df = conn.execute(sql_template.format(filters=filters_sql)).fetchdf()
-
-# ********************************** 
-# Display
-# **********************************
-tab1, tab2 = st.tabs(["Super", "Extras"])
 with tab1:
-    st.dataframe(final_df)
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        personas = ["All"] + df["Persona"].dropna().unique().tolist()
+        selected_persona = st.selectbox("Select Persona", options=personas)
+    with col2:
+        periodos = ["All"] + df["Periodo"].dropna().unique().tolist()
+        selected_period = st.selectbox("Select Periodo", options=periodos)
+    
+    # Filter
+    df_filtered = df.copy()
+    if selected_persona != "All":
+        df_filtered = df_filtered[df_filtered["Persona"] == selected_persona]
+    if selected_period != "All":
+        df_filtered = df_filtered[df_filtered["Periodo"] == selected_period]
+    
+    # Sort descending by Fecha
+    df_filtered = df_filtered.sort_values("Fecha", ascending=False)
+    
+    st.dataframe(df_filtered)
+
 with tab2:
-    st.write("Extra tab content goes here.")
+    # Budget table
+    budget_table = pd.DataFrame({
+        "Categoria": ['Familiar','Medico','Recibos','Restaurantes','Super','Viajes'],
+        "Budget": [65000,50000,120000,120000,300000,120000]
+    })
+
+    # Current period
+    current_periodo = datetime.now().strftime("%Y%m")
+    
+    # Filter df by current period
+    df_current = df[df["Periodo"] == current_periodo]
+    
+    # Aggregate spend per category
+    df_sum = df_current.groupby("Categoria")["Monto"].sum().reset_index(name="Sum")
+    
+    # Merge with budget
+    df_budget = budget_table.merge(df_sum, on="Categoria", how="left")
+    df_budget["Sum"] = df_budget["Sum"].fillna(0)
+    df_budget["Remaining"] = df_budget["Budget"] - df_budget["Sum"]
+    
+    st.dataframe(df_budget)
